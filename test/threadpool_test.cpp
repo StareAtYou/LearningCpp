@@ -5,22 +5,33 @@
 #include <chrono>
 
 
-void task(int id) {
+int task(int id) {
     // std::cout << "Task " << id << " started" << std::endl;
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+    // std::this_thread::sleep_for(std::chrono::seconds(1));
     // std::cout << "Task " << id << " finished" << std::endl;
+
+    std::cout << "This is task: " << id << std::endl;
+    sleep(1);
+    return id*id;
 }
 
 
 void threadpool_test()
 {
     ThreadPool pool(4);
+    std::vector<std::future<int>> futs;
 
     for (int i = 0; i < 8; ++i) {
-        pool.putTask(task, i);
+        futs.emplace_back(pool.putTask(task, i));
     }
 
-    sleep(3);
+    for (int i=0; i<futs.size(); i++) {
+        futs[i].wait();
+        int res = futs[i].get();
+        std::cout << res << std::endl;
+    }
 
     pool.stop_all_thread();
+
+    sleep(1);
 }

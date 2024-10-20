@@ -3,12 +3,13 @@
 
 #include <iostream>
 #include <mutex>
-#include <queue>
 #include <thread>
 #include <vector>
 #include <future>
 #include <functional>
+#include <atomic>
 #include <condition_variable>
+#include "concurrentqueue/concurrentqueue.h"
 
 
 class ThreadPool
@@ -16,6 +17,8 @@ class ThreadPool
 public:
     ThreadPool(size_t numThreads)
     {
+        isFinish.store(true);
+
         for (size_t i = 0; i < numThreads; ++i)
         {
             threads.emplace_back([this](std::stop_token stoken) {
@@ -26,15 +29,16 @@ public:
                     std::function<void()> task;
 
                     {
-                        std::unique_lock<std::mutex> lock(this->queue_mutex);
-                        this->condition.wait(
-                            lock, [this] { return !this->tasks.empty(); });
-                        if (tasks.empty()) {
-                            return;
+                        std::unique_lock<std::mutex> mlock(thread_mutex);
+                        condition.wait(mlock, [this](){
+                            return tasks.size_approx() || !isFinish.load();
+                        });
+
+                        bool status = this->tasks.try_dequeue(task);
+                        if (!status) {
+                            // std::cout << "Queue pop failed." << std::endl;
+                            continue;
                         }
-                        std::cout << "Thread (" << this_id << ") start run..." << std::endl;
-                        task = std::move(this->tasks.front());
-                        this->tasks.pop();
                     }
 
                     task();
@@ -53,20 +57,19 @@ public:
             std::bind(std::forward<Func>(func), std::forward<Args>(args)...));
         std::future<return_type> res = task->get_future();
         {
-            std::unique_lock<std::mutex> lock(queue_mutex);
-            tasks.emplace([task]()
+            tasks.try_enqueue([task]()
             { (*task)(); });
         }
 
         condition.notify_one();
-
         return res;
     }
 
     void stop_all_thread()
     {
-        for (std::jthread &thread : threads)
-        {
+        isFinish.store(false);
+
+        for (std::jthread &thread : threads) {
             thread.request_stop();
         }
 
@@ -81,9 +84,10 @@ public:
 
 private:
     std::vector<std::jthread> threads;
-    std::queue<std::function<void()>> tasks;
-    std::mutex queue_mutex;
+    moodycamel::ConcurrentQueue<std::function<void()>> tasks;
     std::condition_variable condition;
+    std::mutex thread_mutex;
+    std::atomic<bool> isFinish;
 };
 
 #endif
