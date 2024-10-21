@@ -11,14 +11,14 @@ int task(int id) {
     // std::cout << "Task " << id << " finished" << std::endl;
 
     std::cout << "This is task: " << id << std::endl;
-    sleep(1);
+    sleep(3);
     return id*id;
 }
 
 
 void threadpool_test()
 {
-    ThreadPool pool(4);
+    ThreadPool pool(8);
     std::vector<std::future<int>> futs;
 
     for (int i = 0; i < 8; ++i) {
@@ -31,7 +31,6 @@ void threadpool_test()
         std::cout << res << std::endl;
     }
 
-    pool.stop_all_thread();
-
-    sleep(1);
+    // pool.stop_all_thread();
+    // sleep(1);
 }
